@@ -22,14 +22,13 @@ const deployRaffle: DeployFunction = async function (
   let vrfCoordinatorV2Address: string | undefined,
     subscriptionId: string | undefined;
 
+  const deploymentAddress = (await deployments.get('VRFCoordinatorV2Mock'))
+    .address;
+  const vrfCoordinatorV2Mock = await ethers.getContractAt(
+    'VRFCoordinatorV2Mock',
+    deploymentAddress
+  );
   if (chainId == 31337) {
-    // create VRFV2 Subscription
-    const deploymentAddress = (await deployments.get('VRFCoordinatorV2Mock'))
-      .address;
-    const vrfCoordinatorV2Mock = await ethers.getContractAt(
-      'VRFCoordinatorV2Mock',
-      deploymentAddress
-    );
     vrfCoordinatorV2Address = await vrfCoordinatorV2Mock.getAddress();
     const txResponse = await vrfCoordinatorV2Mock.createSubscription({
       from: deployer,
@@ -40,8 +39,6 @@ const deployRaffle: DeployFunction = async function (
     if (logs && 'args' in logs) {
       subscriptionId = logs.args[0];
     }
-    //   // Fund the subscription
-    //   // Our mock makes it so we don't actually have to worry about sending fund
     await vrfCoordinatorV2Mock.fundSubscription(subscriptionId!, FUND_AMOUNT);
   } else {
     vrfCoordinatorV2Address =
@@ -68,7 +65,6 @@ const deployRaffle: DeployFunction = async function (
     log: true,
     waitConfirmations: waitBlockConfirmations,
   });
-
   // Verify the deployment
   if (
     !developmentChains.includes(network.name) &&
@@ -77,7 +73,9 @@ const deployRaffle: DeployFunction = async function (
     log('Verifying...');
     await verify(raffle.address, args);
   }
-  console.log(args);
+  if (chainId === 31337) {
+    await vrfCoordinatorV2Mock.addConsumer(subscriptionId!, raffle.address);
+  }
 
   log('Run This Contract with command:');
   const networkName = network.name == 'hardhat' ? 'localhost' : network.name;
